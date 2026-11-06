@@ -1,0 +1,220 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Thẻ nhân viên KTV</title>
+<style>
+:root{--navy:#071a35;--blue:#123b68;--gold:#e8bd62;--ink:#10213b}
+*{box-sizing:border-box}body{margin:0;font-family:Arial,sans-serif;background:linear-gradient(135deg,#06152c,#123b68);color:#fff;min-height:100vh}
+header{padding:25px 16px;text-align:center}header h1{margin:0;color:#f2cf7a;letter-spacing:2px}header p{color:#d5e2f3}
+main{max-width:1050px;margin:auto;padding:12px 16px 50px}.toolbar,.panel{background:#fff;color:var(--ink);border-radius:16px;padding:18px;margin:14px 0;box-shadow:0 12px 30px #0003}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}input,select{padding:11px;border:1px solid #cbd5e1;border-radius:9px;font-size:15px;min-width:0}input{flex:1}button{border:0;border-radius:9px;padding:11px 16px;background:#123b68;color:white;font-weight:bold;cursor:pointer}button.gold{background:#c99736;color:#111}button.red{background:#a92d36}button.light{background:#e8edf5;color:#123b68}button:disabled{opacity:.5;cursor:not-allowed}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(270px,1fr));gap:18px}
+.employee{background:linear-gradient(145deg,#071a35,#174a78);border:1px solid #d4ad58;border-radius:18px;padding:20px;box-shadow:0 12px 28px #0004}
+.brand{color:#f2cf7a;font-weight:bold;letter-spacing:2px;font-size:13px}.avatar{width:100px;height:100px;border-radius:50%;object-fit:cover;border:3px solid #e8bd62;background:#dce5ef;display:block;margin:14px auto}
+.employee h2{text-align:center;color:#f6d88e;margin:8px 0 16px}.details{line-height:1.9;color:#f1f5fa;font-size:14px}.details b{color:#f2cf7a}.actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}.actions button{flex:1}
+.hidden{display:none!important}.muted{color:#64748b;font-size:13px}.status{margin-top:10px;font-size:14px;white-space:pre-wrap}.formgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px;margin:12px 0}
+h2.section{margin-top:0;color:#123b68}.employee .empty-photo{width:100px;height:100px;margin:14px auto;border-radius:50%;background:#dce5ef;color:#123b68;display:grid;place-items:center;border:3px solid #e8bd62}
+footer{text-align:center;color:#cbd8e8;padding:10px 15px 30px;font-size:13px}
+@media(max-width:520px){header h1{font-size:23px}.toolbar,.panel{padding:14px}}
+</style>
+</head>
+<body>
+<header><h1>THẺ NHÂN VIÊN KTV</h1><p>Hệ thống thông tin nhân viên</p></header>
+<main>
+  <section class="toolbar">
+    <div class="row">
+      <input id="search" placeholder="Tìm theo tên, mã nhân viên hoặc chức vụ...">
+      <button class="light" id="refreshBtn">Làm mới</button>
+      <button class="gold" id="adminToggle">Quản trị</button>
+    </div>
+    <div id="publicStatus" class="status muted">Đang tải danh sách nhân viên...</div>
+  </section>
+
+  <section id="adminPanel" class="panel hidden">
+    <h2 class="section">Khu vực quản trị</h2>
+    <div id="loginArea">
+      <p class="muted">Đăng nhập bằng email và mật khẩu tài khoản quản trị Supabase.</p>
+      <div class="row">
+        <input id="email" type="email" placeholder="Email quản trị">
+        <input id="password" type="password" placeholder="Mật khẩu">
+        <button id="loginBtn">Đăng nhập</button>
+      </div>
+    </div>
+    <div id="manageArea" class="hidden">
+      <div class="row" style="justify-content:space-between">
+        <p id="adminInfo" class="muted">Đã đăng nhập</p>
+        <button class="red" id="logoutBtn">Đăng xuất</button>
+      </div>
+      <h3 id="formTitle">Thêm nhân viên</h3>
+      <form id="employeeForm">
+        <input id="recordId" type="hidden">
+        <div class="formgrid">
+          <input id="full_name" placeholder="Họ và tên *" required>
+          <input id="employee_code" placeholder="Mã nhân viên">
+          <input id="position" placeholder="Chức vụ">
+          <input id="birth_date" type="date" aria-label="Ngày sinh">
+          <select id="gender"><option value="">Chọn giới tính</option><option>Nam</option><option>Nữ</option><option>Khác</option></select>
+          <input id="facebook_url" type="url" placeholder="Link Facebook">
+          <input id="photo_url" type="url" placeholder="Link ảnh (URL)">
+        </div>
+        <div class="row">
+          <button class="gold" type="submit">Lưu nhân viên</button>
+          <button class="light" type="button" id="cancelEdit">Hủy sửa</button>
+        </div>
+      </form>
+      <div id="adminStatus" class="status muted"></div>
+    </div>
+  </section>
+
+  <section id="employeeList" class="grid"></section>
+</main>
+<footer>© KTV · Thông tin công khai chỉ hiển thị các trường được cấp quyền</footer>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+<script>
+const SUPABASE_URL = "https://marvoermojkkofrshsvw.supabase.co";
+const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_vn2tmuTBgOHScpaYR0buhQ_7n1DbOhT";
+const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
+
+const $ = id => document.getElementById(id);
+let employees = [];
+let currentUser = null;
+
+function esc(value="") {
+  return String(value).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+}
+function safeUrl(value) {
+  try { const u = new URL(value); return ["http:","https:"].includes(u.protocol) ? u.href : ""; }
+  catch { return ""; }
+}
+function status(id, message, error=false) {
+  $(id).textContent = message;
+  $(id).style.color = error ? "#b42318" : "#64748b";
+}
+function render() {
+  const q = $("search").value.trim().toLowerCase();
+  const list = employees.filter(e => [e.full_name,e.employee_code,e.position].some(v => String(v||"").toLowerCase().includes(q)));
+  $("employeeList").innerHTML = list.map(e => {
+    const photo = safeUrl(e.photo_url);
+    const fb = safeUrl(e.facebook_url);
+    return `<article class="employee" id="card-${esc(e.id)}">
+      <div class="brand">KTV · EMPLOYEE CARD</div>
+      ${photo ? `<img class="avatar" src="${esc(photo)}" alt="Ảnh nhân viên" onerror="this.style.display='none'">` : `<div class="empty-photo">KTV</div>`}
+      <h2>${esc(e.full_name || "Chưa cập nhật")}</h2>
+      <div class="details">
+        <div><b>Mã nhân viên:</b> ${esc(e.employee_code || "—")}</div>
+        <div><b>Chức vụ:</b> ${esc(e.position || "—")}</div>
+        ${currentUser ? `<div><b>Ngày sinh:</b> ${esc(e.birth_date || "—")}</div><div><b>Giới tính:</b> ${esc(e.gender || "—")}</div>` : ""}
+      </div>
+      <div class="actions">
+        ${fb ? `<button class="gold" onclick="window.open('${esc(fb)}','_blank','noopener')">Facebook</button>` : ""}
+        <button class="light" onclick="downloadCard('${esc(e.id)}')">Tải PNG</button>
+        ${currentUser ? `<button class="light" onclick="editEmployee('${esc(e.id)}')">Sửa</button><button class="red" onclick="deleteEmployee('${esc(e.id)}')">Xóa</button>` : ""}
+      </div>
+    </article>`;
+  }).join("");
+  if (!list.length) $("employeeList").innerHTML = '<div class="panel muted">Chưa có nhân viên phù hợp.</div>';
+}
+async function loadEmployees() {
+  status("publicStatus","Đang tải dữ liệu...");
+  const fields = currentUser ? "*" : "id,full_name,employee_code,position,facebook_url,photo_url";
+  const {data,error} = await db.from("employees").select(fields).order("full_name");
+  if (error) {
+    status("publicStatus","Không tải được dữ liệu: " + error.message,true);
+    return;
+  }
+  employees = data || [];
+  render();
+  status("publicStatus",`Đã tải ${employees.length} nhân viên.`);
+}
+function resetForm() {
+  $("employeeForm").reset();
+  $("recordId").value = "";
+  $("formTitle").textContent = "Thêm nhân viên";
+}
+async function updateAuthUI() {
+  const {data:{user}} = await db.auth.getUser();
+  currentUser = user;
+  $("loginArea").classList.toggle("hidden",!!user);
+  $("manageArea").classList.toggle("hidden",!user);
+  if (user) $("adminInfo").textContent = "Đã đăng nhập: " + user.email;
+  await loadEmployees();
+}
+$("adminToggle").onclick = () => $("adminPanel").classList.toggle("hidden");
+$("refreshBtn").onclick = loadEmployees;
+$("search").oninput = render;
+$("loginBtn").onclick = async () => {
+  status("publicStatus","Đang đăng nhập...");
+  const {error} = await db.auth.signInWithPassword({email:$("email").value.trim(),password:$("password").value});
+  if (error) { status("publicStatus","Đăng nhập thất bại: "+error.message,true); return; }
+  await updateAuthUI();
+  $("adminPanel").classList.remove("hidden");
+};
+$("logoutBtn").onclick = async () => {
+  await db.auth.signOut();
+  resetForm();
+  await updateAuthUI();
+};
+$("employeeForm").onsubmit = async event => {
+  event.preventDefault();
+  if (!currentUser) return status("adminStatus","Bạn cần đăng nhập.",true);
+  const id = $("recordId").value;
+  const payload = {
+    full_name:$("full_name").value.trim(),
+    employee_code:$("employee_code").value.trim() || null,
+    position:$("position").value.trim() || null,
+    birth_date:$("birth_date").value || null,
+    gender:$("gender").value || null,
+    facebook_url:$("facebook_url").value.trim() || null,
+    photo_url:$("photo_url").value.trim() || null
+  };
+  const result = id
+    ? await db.from("employees").update(payload).eq("id",id)
+    : await db.from("employees").insert(payload);
+  if (result.error) return status("adminStatus","Lưu thất bại: "+result.error.message,true);
+  status("adminStatus","Đã lưu nhân viên thành công.");
+  resetForm();
+  await loadEmployees();
+};
+window.editEmployee = id => {
+  const e = employees.find(x => String(x.id) === String(id));
+  if (!e) return;
+  $("recordId").value = e.id;
+  $("full_name").value = e.full_name || "";
+  $("employee_code").value = e.employee_code || "";
+  $("position").value = e.position || "";
+  $("birth_date").value = e.birth_date || "";
+  $("gender").value = e.gender || "";
+  $("facebook_url").value = e.facebook_url || "";
+  $("photo_url").value = e.photo_url || "";
+  $("formTitle").textContent = "Sửa nhân viên";
+  $("adminPanel").classList.remove("hidden");
+  window.scrollTo({top:0,behavior:"smooth"});
+};
+window.deleteEmployee = async id => {
+  if (!currentUser || !confirm("Bạn chắc chắn muốn xóa nhân viên này?")) return;
+  const {error} = await db.from("employees").delete().eq("id",id);
+  if (error) return status("adminStatus","Xóa thất bại: "+error.message,true);
+  status("adminStatus","Đã xóa nhân viên.");
+  await loadEmployees();
+};
+window.downloadCard = async id => {
+  const card = $("card-"+CSS.escape(id));
+  if (!card) return;
+  try {
+    const canvas = await html2canvas(card,{backgroundColor:null,scale:2,useCORS:true});
+    const a = document.createElement("a");
+    a.download = "the-nhan-vien-ktv.png";
+    a.href = canvas.toDataURL("image/png");
+    a.click();
+  } catch(e) { alert("Không thể tải ảnh: "+e.message); }
+};
+$("cancelEdit").onclick = resetForm;
+db.auth.onAuthStateChange(() => { setTimeout(updateAuthUI,0); });
+updateAuthUI();
+</script>
+</body>
+</html>
